@@ -158,23 +158,48 @@ canvas{position:absolute;inset:0;z-index:2;touch-action:none}
 const DEFAULT={password:"0098",title:"現場刮刮樂",subtitle:"請選一格刮開號碼，號碼刮出來後按完成鎖定。",cellCount:160,cols:16,maxNumber:160,scratchPercent:50,winningNumbers:[]};
 
 function loadConfig(){
-  try{
-    const saved=JSON.parse(localStorage.getItem("status_board_config"))||{};
-    const merged=Object.assign({},DEFAULT,saved);
-    if(!Array.isArray(merged.winningNumbers)) merged.winningNumbers=[];
-    return merged;
-  }catch(e){return DEFAULT}
+  const keys=[
+    "status_board_config",
+    "final_real_board_config",
+    "simple_winning_board_config",
+    "stable_number_board_config",
+    "tier_number_board_config"
+  ];
+  for(const key of keys){
+    try{
+      const saved=JSON.parse(localStorage.getItem(key));
+      if(saved){
+        const merged=Object.assign({},DEFAULT,saved);
+        if(!Array.isArray(merged.winningNumbers)) merged.winningNumbers=[];
+        localStorage.setItem("status_board_config",JSON.stringify(merged));
+        return merged;
+      }
+    }catch(e){}
+  }
+  return DEFAULT;
 }
 function saveConfig(c){localStorage.setItem("status_board_config",JSON.stringify(c))}
 function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr}
 function makeNumbers(count,max){const nums=[];for(let i=1;i<=count;i++)nums.push(((i-1)%max)+1);return shuffle(nums)}
 function newState(count,max){return{numbers:makeNumbers(count,max),used:Array.from({length:count},()=>false),logs:[]}}
 function loadState(count,max){
-  try{
-    const s=JSON.parse(localStorage.getItem("status_board_state"));
-    if(!s||!Array.isArray(s.numbers)||!Array.isArray(s.used)||s.numbers.length!==count||s.used.length!==count)return newState(count,max);
-    return s;
-  }catch(e){return newState(count,max)}
+  const keys=[
+    "status_board_state",
+    "final_real_board_state",
+    "simple_winning_board_state",
+    "stable_number_board_state",
+    "tier_number_board_state"
+  ];
+  for(const key of keys){
+    try{
+      const s=JSON.parse(localStorage.getItem(key));
+      if(s&&Array.isArray(s.numbers)&&Array.isArray(s.used)&&s.numbers.length===count&&s.used.length===count){
+        localStorage.setItem("status_board_state",JSON.stringify(s));
+        return s;
+      }
+    }catch(e){}
+  }
+  return newState(count,max);
 }
 function saveState(s){localStorage.setItem("status_board_state",JSON.stringify(s))}
 function makeCode(){return Math.random().toString(36).slice(2,8).toUpperCase()}
@@ -207,12 +232,16 @@ function logoutAdmin(){
 }
 
 function renderStatus(){
-  const totalPrize=uniqueNumbers(cfg.winningNumbers).length;
-  const openedPrize=openedWinningNumbers().length;
-  const remainingPrize=Math.max(totalPrize-openedPrize,0);
-  const openedScratch=state.used.filter(Boolean).length;
   const totalScratch=Number(cfg.cellCount);
+  const openedScratch=state.used.filter(Boolean).length;
   const remainingScratch=Math.max(totalScratch-openedScratch,0);
+
+  const wins=uniqueNumbers(cfg.winningNumbers);
+  const used=usedNumbers();
+  const openedPrize=wins.filter(n=>used.includes(n)).length;
+  const totalPrize=wins.length;
+  const remainingPrize=Math.max(totalPrize-openedPrize,0);
+
   document.getElementById("totalPrizeCount").textContent=totalPrize;
   document.getElementById("openedPrizeCount").textContent=openedPrize;
   document.getElementById("remainingPrizeCount").textContent=remainingPrize;
@@ -241,6 +270,7 @@ function render(){
 }
 
 function openScratch(i){
+  if(state.used[i]) return;
   selected=i;currentNumber=state.numbers[i];currentCode=makeCode();scratched=false;hasStartedScratch=false;
   document.getElementById("numberText").textContent=currentNumber;
   document.getElementById("codeText").textContent="";
